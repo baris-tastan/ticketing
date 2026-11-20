@@ -1,0 +1,188 @@
+#####################################################################
+# Ticketing API - manual tests
+# Needs the VS Code extension "REST Client" (by Huachao Mao).
+# Click "Send Request" above a request to run it.
+#
+# Order: run the SETUP section first (register + login).
+# The tokens and the booking id are then filled in automatically.
+# If seats are already booked from earlier runs, change the seat
+# variables below (check ids with "Seat map").
+#####################################################################
+
+@host = http://localhost:8080
+
+# Seats used in the tests (change these if they're already booked)
+@seatA = 3
+@seatB = 2
+
+
+#####################################################################
+# SETUP
+#####################################################################
+
+### Register Ali (201, or 409 if he already exists)
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{ "email": "ali@x.com", "password": "secret123" }
+
+### Register Ayşe (201, or 409 if she already exists)
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{ "email": "ayse@x.com", "password": "secret123" }
+
+### Log in as Ali (200 + token)
+# @name loginAli
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "ali@x.com", "password": "secret123" }
+
+### Log in as Ayşe (200 + token)
+# @name loginAyse
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "ayse@x.com", "password": "secret123" }
+
+
+#####################################################################
+# AUTH
+#####################################################################
+
+### Register with a short password (400)
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{ "email": "someone@x.com", "password": "123" }
+
+### Register Ali again with different capitals (409)
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{ "email": "ALI@X.com", "password": "secret123" }
+
+### Wrong password (401)
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "ali@x.com", "password": "wrong-password" }
+
+### Unknown email (401, same message as wrong password)
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "nobody@x.com", "password": "secret123" }
+
+
+#####################################################################
+# EVENTS AND SEATS (public, no token needed)
+#####################################################################
+
+### All events (200)
+GET {{host}}/events
+
+### One event (200)
+GET {{host}}/events/1
+
+### Event that doesn't exist (404)
+GET {{host}}/events/999
+
+### Seat map (200) - shows AVAILABLE / HELD / SOLD
+GET {{host}}/events/1/seats
+
+### Public endpoint with an invalid token (401)
+GET {{host}}/events
+Authorization: Bearer this-is-not-a-real-token
+
+
+#####################################################################
+# HOLDS
+#####################################################################
+
+### Ali holds seat A (204)
+POST {{host}}/seats/{{seatA}}/hold
+Authorization: Bearer {{loginAli.response.body.token}}
+
+### Ali holds seat A again - double click (204)
+POST {{host}}/seats/{{seatA}}/hold
+Authorization: Bearer {{loginAli.response.body.token}}
+
+### Ayşe tries seat A (409)
+POST {{host}}/seats/{{seatA}}/hold
+Authorization: Bearer {{loginAyse.response.body.token}}
+
+### Hold a seat that doesn't exist (404)
+POST {{host}}/seats/999999/hold
+Authorization: Bearer {{loginAli.response.body.token}}
+
+### Hold without a token (401)
+POST {{host}}/seats/{{seatA}}/hold
+
+
+#####################################################################
+# CREATE BOOKINGS
+#####################################################################
+
+### A1. Ali books seat B without holding it first (201)
+POST {{host}}/bookings
+Authorization: Bearer {{loginAli.response.body.token}}
+Content-Type: application/json
+
+{ "seatId": {{seatB}} }
+
+### A2. Ali books seat A, which he holds (201)
+# @name createBooking
+POST {{host}}/bookings
+Authorization: Bearer {{loginAli.response.body.token}}
+Content-Type: application/json
+
+{ "seatId": {{seatA}} }
+
+### A3. Ayşe tries seat A (409)
+POST {{host}}/bookings
+Authorization: Bearer {{loginAyse.response.body.token}}
+Content-Type: application/json
+
+{ "seatId": {{seatA}} }
+
+### A4. No token (401)
+POST {{host}}/bookings
+Content-Type: application/json
+
+{ "seatId": {{seatA}} }
+
+### A5. Seat that doesn't exist (404)
+POST {{host}}/bookings
+Authorization: Bearer {{loginAli.response.body.token}}
+Content-Type: application/json
+
+{ "seatId": 999999 }
+
+### A6. Missing seatId (400)
+POST {{host}}/bookings
+Authorization: Bearer {{loginAli.response.body.token}}
+Content-Type: application/json
+
+{ }
+
+
+#####################################################################
+# VIEW BOOKINGS (uses the id from A2 automatically)
+#####################################################################
+
+### B1. Ali views his own booking (200)
+GET {{host}}/bookings/{{createBooking.response.body.id}}
+Authorization: Bearer {{loginAli.response.body.token}}
+
+### B2. Ayşe tries Ali's booking (404)
+GET {{host}}/bookings/{{createBooking.response.body.id}}
+Authorization: Bearer {{loginAyse.response.body.token}}
+
+### B3. Booking that doesn't exist (404, same answer as B2)
+GET {{host}}/bookings/999999
+Authorization: Bearer {{loginAli.response.body.token}}
+
+### B4. No token (401)
+GET {{host}}/bookings/{{createBooking.response.body.id}}
