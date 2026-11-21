@@ -12,7 +12,7 @@
 @host = http://localhost:8080
 
 # Seats used in the tests (change these if they're already booked)
-@seatA = 3
+@seatA = 5
 @seatB = 2
 
 
@@ -186,3 +186,68 @@ Authorization: Bearer {{loginAli.response.body.token}}
 
 ### B4. No token (401)
 GET {{host}}/bookings/{{createBooking.response.body.id}}
+
+
+#####################################################################
+# PAYMENTS
+#####################################################################
+
+@paySeatA = 8
+@paySeatB = 4
+
+### P1. Ali books seat A (201)
+# @name bookingA
+POST {{host}}/bookings
+Authorization: Bearer {{loginAli.response.body.token}}
+Content-Type: application/json
+
+{ "seatId": {{paySeatA}} }
+
+### P2. Ali pays for it with a good card (200, CONFIRMED)
+POST {{host}}/bookings/{{bookingA.response.body.id}}/pay
+Authorization: Bearer {{loginAli.response.body.token}}
+Content-Type: application/json
+
+{ "cardNumber": "4242424242424242" }
+
+### P3. Ali pays again (409, "it is CONFIRMED")
+POST {{host}}/bookings/{{bookingA.response.body.id}}/pay
+Authorization: Bearer {{loginAli.response.body.token}}
+Content-Type: application/json
+
+{ "cardNumber": "4242424242424242" }
+
+### P4. Ali books seat B (201)
+# @name bookingB
+POST {{host}}/bookings
+Authorization: Bearer {{loginAli.response.body.token}}
+Content-Type: application/json
+
+{ "seatId": {{paySeatB}} }
+
+### P5. Ayşe tries to pay for Ali's booking (404)
+POST {{host}}/bookings/{{bookingB.response.body.id}}/pay
+Authorization: Bearer {{loginAyse.response.body.token}}
+Content-Type: application/json
+
+{ "cardNumber": "4242424242424242" }
+
+### P6. Ali pays with a card that gets declined (200, CANCELLED)
+POST {{host}}/bookings/{{bookingB.response.body.id}}/pay
+Authorization: Bearer {{loginAli.response.body.token}}
+Content-Type: application/json
+
+{ "cardNumber": "4000000000000002" }
+
+### P7. Missing card number (400)
+POST {{host}}/bookings/{{bookingB.response.body.id}}/pay
+Authorization: Bearer {{loginAli.response.body.token}}
+Content-Type: application/json
+
+{ }
+
+### P8. No token (401)
+POST {{host}}/bookings/{{bookingB.response.body.id}}/pay
+Content-Type: application/json
+
+{ "cardNumber": "4242424242424242" }

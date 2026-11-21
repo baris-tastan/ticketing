@@ -2,7 +2,9 @@ package com.ticketcompany.booking_service.repository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -17,4 +19,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query("select b.seat.id from Booking b where b.seat.id in :seatIds and b.status = :status")
     List<Long> findSeatIdsWithStatus(@Param("seatIds") List<Long> seatIds,
                                      @Param("status") BookingStatus status);
+    @EntityGraph(attributePaths = "seat")
+    Optional<Booking> findWithSeatById(Long id);
 }

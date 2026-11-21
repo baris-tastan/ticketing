@@ -1,6 +1,9 @@
 package com.ticketcompany.booking_service.service;
 
+import java.time.Instant;
+
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,8 +13,11 @@ import com.ticketcompany.booking_service.domain.Seat;
 import com.ticketcompany.booking_service.dto.BookingResponse;
 import com.ticketcompany.booking_service.dto.HoldResponse;
 import com.ticketcompany.booking_service.exception.BookingNotFoundException;
+import com.ticketcompany.booking_service.exception.BookingNotPayableException;
 import com.ticketcompany.booking_service.exception.SeatNotFoundException;
 import com.ticketcompany.booking_service.exception.SeatUnavailableException;
+import com.ticketcompany.booking_service.payment.PaymentGateway;
+import com.ticketcompany.booking_service.payment.PaymentOutcome;
 import com.ticketcompany.booking_service.repository.BookingRepository;
 import com.ticketcompany.booking_service.repository.SeatRepository;
 
@@ -21,13 +27,42 @@ public class BookingService {
     private final SeatRepository seatRepository;
     private final BookingRepository bookingRepository;
     private final SeatHoldService seatHoldService;
+    private final PaymentGateway paymentGateway;
+    private final PaymentResultService paymentResultService;
 
     public BookingService(SeatRepository seatRepository, BookingRepository bookingRepository,
-                          SeatHoldService seatHoldService) {
+                          SeatHoldService seatHoldService, PaymentGateway paymentGateway,
+                          PaymentResultService paymentResultService) {
         this.seatRepository = seatRepository;
         this.bookingRepository = bookingRepository;
         this.seatHoldService = seatHoldService;
+        this.paymentGateway = paymentGateway;
+        this.paymentResultService = paymentResultService;
     }
+
+    public BookingResponse pay(Long bookingId, String payerEmail, String cardNumber) {
+        Booking booking = bookingRepository.findWithSeatById(bookingId)
+                .orElseThrow(() -> new BookingNotFoundException(bookingId));
+
+        if (!booking.getCustomerEmail().equals(payerEmail)) {
+            throw new BookingNotFoundException(bookingId);
+        }
+        if (booking.getStatus() != BookingStatus.PENDING) {
+            throw new BookingNotPayableException(bookingId, "it is " + booking.getStatus());
+        }
+        if (!Instant.now().isBefore(booking.getExpiresAt())) {
+            throw new BookingNotPayableException(bookingId, "its payment deadline has passed");
+        }
+
+        PaymentOutcome outcome = paymentGateway.charge(bookingId, booking.getSeat().getPrice(), cardNumber);
+
+        try {
+            return paymentResultService.applyPaymentResult(bookingId, outcome);
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new BookingNotPayableException(bookingId, "it was changed at the same time, please check its status");
+        }
+    }
+
 
     public BookingResponse createBooking(Long seatId, String customerEmail) {
         HoldResponse hold = seatHoldService.holdSeat(seatId, customerEmail);      // ← now returns the deadline

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ticketcompany.booking_service.dto.BookingResponse;
 import com.ticketcompany.booking_service.dto.CreateBookingRequest;
+import com.ticketcompany.booking_service.dto.PayRequest;
 import com.ticketcompany.booking_service.service.BookingService;
 
 import jakarta.validation.Valid;
@@ -34,6 +35,13 @@ public class BookingController {
         BookingResponse booking = bookingService.createBooking(request.seatId(), jwt.getSubject());
         URI location = URI.create("/bookings/" + booking.id());
         return ResponseEntity.created(location).body(booking);
+    }
+
+    @PostMapping("/{bookingId}/pay")
+    public BookingResponse pay(@PathVariable Long bookingId,
+                               @Valid @RequestBody PayRequest request,
+                               @AuthenticationPrincipal Jwt jwt) {
+        return bookingService.pay(bookingId, jwt.getSubject(), request.cardNumber());
     }
 
     @GetMapping("/{bookingId}")

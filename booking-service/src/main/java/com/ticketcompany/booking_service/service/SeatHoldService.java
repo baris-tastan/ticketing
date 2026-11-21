@@ -6,10 +6,10 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
 import com.ticketcompany.booking_service.domain.Seat;
@@ -41,11 +41,10 @@ public class SeatHoldService {
         }
 
         String key = holdKey(seatId);
-        Instant now = Instant.now();
         Boolean acquired = redis.opsForValue().setIfAbsent(key, customerEmail, holdDuration);
 
         if (Boolean.TRUE.equals(acquired)) {
-            return new HoldResponse(seatId, now.plus(holdDuration));      // a new hold: we know the deadline
+            return new HoldResponse(seatId, holdExpiry(key, seatId));      // a new hold: we know the deadline
         }
 
         String currentHolder = redis.opsForValue().get(key);
@@ -53,15 +52,18 @@ public class SeatHoldService {
             throw new SeatUnavailableException(seatId);                    // someone else holds it
         }
 
-        return new HoldResponse(seatId, remainingDeadline(key, seatId));   // already ours: ask Redis
+        return new HoldResponse(seatId, holdExpiry(key, seatId));   // already ours: ask Redis
     }
 
-    private Instant remainingDeadline(String key, Long seatId) {
-        Long millisLeft = redis.getExpire(key, TimeUnit.MILLISECONDS);
-        if (millisLeft == null || millisLeft <= 0) {
-            throw new SeatUnavailableException(seatId);                    // it expired a moment ago
+    private static final RedisScript<Long> EXPIRE_TIME_SCRIPT =
+            RedisScript.of("return redis.call('PEXPIRETIME', KEYS[1])", Long.class);
+
+    private Instant holdExpiry(String key, Long seatId) {
+        Long expiresAtMillis = redis.execute(EXPIRE_TIME_SCRIPT, List.of(key));
+        if (expiresAtMillis == null || expiresAtMillis <= 0) {
+            throw new SeatUnavailableException(seatId);
         }
-        return Instant.now().plusMillis(millisLeft);
+        return Instant.ofEpochMilli(expiresAtMillis);
     }
 
     public Set<Long> findHeldSeatIds(List<Long> seatIds) {
