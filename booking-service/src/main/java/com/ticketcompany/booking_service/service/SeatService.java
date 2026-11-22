@@ -1,5 +1,7 @@
 package com.ticketcompany.booking_service.service;
 
+import com.ticketcompany.booking_service.repository.BookingRepository;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -15,15 +17,17 @@ import com.ticketcompany.booking_service.repository.SeatRepository;
 @Service
 public class SeatService {
 
+    private final BookingRepository bookingRepository;
     private final EventRepository eventRepository;
     private final SeatRepository seatRepository;
     private final SeatHoldService seatHoldService;
 
     public SeatService(EventRepository eventRepository, SeatRepository seatRepository,
-                       SeatHoldService seatHoldService) {
+                       SeatHoldService seatHoldService, BookingRepository bookingRepository) {
         this.eventRepository = eventRepository;
         this.seatRepository = seatRepository;
         this.seatHoldService = seatHoldService;
+        this.bookingRepository = bookingRepository;
     }
 
     public List<SeatResponse> getSeatsForEvent(Long eventId) {
@@ -38,6 +42,7 @@ public class SeatService {
             seatIds.add(seat.getId());
         }
         Set<Long> heldSeatIds = seatHoldService.findHeldSeatIds(seatIds);
+        heldSeatIds.addAll(bookingRepository.findSeatIdsWithActivePendingBooking(seatIds, Instant.now()));
 
         List<SeatResponse> result = new ArrayList<>();
         for (Seat seat : seats) {

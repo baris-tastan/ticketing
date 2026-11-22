@@ -26,7 +26,7 @@ public class BookingTimeoutJob {
         this.bookingService = bookingService;
     }
 
-    @Scheduled(fixedDelay = 60000)
+    @Scheduled(fixedDelay = 600000)
     public void cancelExpiredBookings() {
         List<Booking> expired =
                 bookingRepository.findByStatusAndExpiresAtBefore(BookingStatus.PENDING, Instant.now());

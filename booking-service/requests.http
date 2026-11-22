@@ -192,7 +192,7 @@ GET {{host}}/bookings/{{createBooking.response.body.id}}
 # PAYMENTS
 #####################################################################
 
-@paySeatA = 8
+@paySeatA = 5
 @paySeatB = 4
 
 ### P1. Ali books seat A (201)

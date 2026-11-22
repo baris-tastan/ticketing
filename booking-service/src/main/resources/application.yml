@@ -1,4 +1,6 @@
 spring:
+  kafka:
+    bootstrap-servers: localhost:9092
   mvc:
     problemdetails:
       enabled: true
@@ -13,9 +15,10 @@ spring:
       ddl-auto: validate
     show-sql: true
     open-in-view: false
+# noinspection SpringBootApplicationYaml
 jwt:
   secret: ${JWT_SECRET:dev-only-secret-please-change-it-0123456789}
 booking:
-  hold-duration: 2m
+  hold-duration: 1m
 
     

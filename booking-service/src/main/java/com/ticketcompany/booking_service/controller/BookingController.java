@@ -38,10 +38,13 @@ public class BookingController {
     }
 
     @PostMapping("/{bookingId}/pay")
-    public BookingResponse pay(@PathVariable Long bookingId,
-                               @Valid @RequestBody PayRequest request,
-                               @AuthenticationPrincipal Jwt jwt) {
-        return bookingService.pay(bookingId, jwt.getSubject(), request.cardNumber());
+    public ResponseEntity<BookingResponse> pay(@PathVariable Long bookingId,
+                                               @Valid @RequestBody PayRequest request,
+                                               @AuthenticationPrincipal Jwt jwt) {
+        bookingService.pay(bookingId, jwt.getSubject(), request.cardNumber());
+        return ResponseEntity.accepted()
+                .location(URI.create("/bookings/" + bookingId))
+                .build();
     }
 
     @GetMapping("/{bookingId}")

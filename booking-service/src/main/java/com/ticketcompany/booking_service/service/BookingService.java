@@ -3,7 +3,6 @@ package com.ticketcompany.booking_service.service;
 import java.time.Instant;
 
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,8 +15,8 @@ import com.ticketcompany.booking_service.exception.BookingNotFoundException;
 import com.ticketcompany.booking_service.exception.BookingNotPayableException;
 import com.ticketcompany.booking_service.exception.SeatNotFoundException;
 import com.ticketcompany.booking_service.exception.SeatUnavailableException;
-import com.ticketcompany.booking_service.payment.PaymentGateway;
-import com.ticketcompany.booking_service.payment.PaymentOutcome;
+import com.ticketcompany.booking_service.messaging.PaymentRequestPublisher;
+import com.ticketcompany.booking_service.messaging.PaymentRequestedEvent;
 import com.ticketcompany.booking_service.repository.BookingRepository;
 import com.ticketcompany.booking_service.repository.SeatRepository;
 
@@ -27,20 +26,17 @@ public class BookingService {
     private final SeatRepository seatRepository;
     private final BookingRepository bookingRepository;
     private final SeatHoldService seatHoldService;
-    private final PaymentGateway paymentGateway;
-    private final PaymentResultService paymentResultService;
+    private final PaymentRequestPublisher paymentRequestPublisher;
 
     public BookingService(SeatRepository seatRepository, BookingRepository bookingRepository,
-                          SeatHoldService seatHoldService, PaymentGateway paymentGateway,
-                          PaymentResultService paymentResultService) {
+                          SeatHoldService seatHoldService, PaymentRequestPublisher paymentRequestPublisher) {
         this.seatRepository = seatRepository;
         this.bookingRepository = bookingRepository;
         this.seatHoldService = seatHoldService;
-        this.paymentGateway = paymentGateway;
-        this.paymentResultService = paymentResultService;
+        this.paymentRequestPublisher = paymentRequestPublisher;
     }
 
-    public BookingResponse pay(Long bookingId, String payerEmail, String cardNumber) {
+    public void pay(Long bookingId, String payerEmail, String cardNumber) {
         Booking booking = bookingRepository.findWithSeatById(bookingId)
                 .orElseThrow(() -> new BookingNotFoundException(bookingId));
 
@@ -54,14 +50,19 @@ public class BookingService {
             throw new BookingNotPayableException(bookingId, "its payment deadline has passed");
         }
 
-        PaymentOutcome outcome = paymentGateway.charge(bookingId, booking.getSeat().getPrice(), cardNumber);
+        paymentRequestPublisher.publish(new PaymentRequestedEvent(
+                bookingId, booking.getSeat().getPrice(), toPaymentToken(cardNumber)));
 
-        try {
-            return paymentResultService.applyPaymentResult(bookingId, outcome);
-        } catch (ObjectOptimisticLockingFailureException e) {
-            throw new BookingNotPayableException(bookingId, "it was changed at the same time, please check its status");
-        }
+        return;
     }
+
+    private static String toPaymentToken(String cardNumber) {
+        String lastFour = cardNumber.length() >= 4
+                ? cardNumber.substring(cardNumber.length() - 4)
+                : cardNumber;
+        return "tok_" + lastFour;
+    }
+    
 
 
     public BookingResponse createBooking(Long seatId, String customerEmail) {
@@ -69,6 +70,8 @@ public class BookingService {
 
         Seat seat = seatRepository.findById(seatId)
                 .orElseThrow(() -> new SeatNotFoundException(seatId));
+
+        bookingRepository.cancelExpiredPendingBooking(seatId, Instant.now());
 
         Booking booking;
         try {
