@@ -1,6 +1,7 @@
 package com.ticketcompany.booking_service.service;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,37 +26,44 @@ public class PaymentResultService {
     public PaymentResultService(BookingRepository bookingRepository) {
         this.bookingRepository = bookingRepository;
     }
-
     @Transactional
-    public BookingResponse applyPaymentResult(Long bookingId, PaymentOutcome outcome) {
-        Booking booking = bookingRepository.findWithSeatById(bookingId)
-                .orElseThrow(() -> new BookingNotFoundException(bookingId));
+    public void applyPaymentResult(Long bookingId, PaymentOutcome outcome) {
+        Optional<Booking> found = bookingRepository.findWithSeatById(bookingId);
+        if (found.isEmpty()) {
+            log.warn("Ignoring payment result for unknown booking {}", bookingId);
+            return;
+        }
+        Booking booking = found.get();
 
-        // 1. The booking changed while the bank was working (e.g. the timeout job cancelled it)
         if (booking.getStatus() != BookingStatus.PENDING) {
-            if (outcome == PaymentOutcome.APPROVED) {
-                log.warn("Booking {} is {} but its payment was approved: REFUND NEEDED",
-                        bookingId, booking.getStatus());
-            }
-            throw new BookingNotPayableException(bookingId, "it is " + booking.getStatus());
+            handleResultForFinishedBooking(booking, outcome);
+            return;
         }
 
-        // 2. The bank said no
         if (outcome == PaymentOutcome.DECLINED) {
             booking.cancel();
-            return BookingResponse.from(booking);
+            return;
         }
 
-        // 3. Approved, but the deadline passed while the bank was working
         if (!Instant.now().isBefore(booking.getExpiresAt())) {
             booking.cancel();
-            log.warn("Payment for booking {} arrived after its deadline: REFUND NEEDED", bookingId);
-            return BookingResponse.from(booking);
+            log.warn("REFUND NEEDED: booking {} was paid after its deadline", bookingId);
+            return;
         }
 
-        // 4. Approved, in time: sell the seat
         booking.confirm();
         booking.getSeat().markSold();
-        return BookingResponse.from(booking);
+    }
+
+    private void handleResultForFinishedBooking(Booking booking, PaymentOutcome outcome) {
+        if (outcome == PaymentOutcome.DECLINED) {
+            log.info("Ignoring DECLINED result for booking {}: it is already {}", booking.getId(), booking.getStatus());
+            return;
+        }
+        if (booking.getStatus() == BookingStatus.CONFIRMED) {
+            log.info("Ignoring duplicate APPROVED result for booking {}", booking.getId());
+            return;
+        }
+        log.warn("REFUND NEEDED: booking {} was paid but is already {}", booking.getId(), booking.getStatus());
     }
 }

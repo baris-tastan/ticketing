@@ -1,0 +1,96 @@
+### ===================== KAFKA TESTS =====================
+@kSeat1 = 1
+@kSeat2 = 2
+@kSeat3 = 6
+@kEmail = kafka-test@example.com
+@kPassword = password123
+@kToken = {{kLogin.response.body.$.token}}
+
+GET http://localhost:8080/events/1/seats
+### K1 register (a 409 "already registered" is fine)
+POST http://localhost:8080/auth/register
+Content-Type: application/json
+
+{"email": "{{kEmail}}", "password": "{{kPassword}}"}
+
+### K2 login
+# @name kLogin
+POST http://localhost:8080/auth/login
+Content-Type: application/json
+
+{"email": "{{kEmail}}", "password": "{{kPassword}}"}
+
+
+
+
+### ---------- TEST 1: happy path ----------
+
+### T1a book seat 1
+# @name kBook1
+POST http://localhost:8080/bookings
+Authorization: Bearer {{kToken}}
+Content-Type: application/json
+
+{"seatId": {{kSeat1}}}
+
+### T1b pay (expect 202)
+POST http://localhost:8080/bookings/{{kBook1.response.body.$.id}}/pay
+Authorization: Bearer {{kToken}}
+Content-Type: application/json
+
+{"cardNumber": "4111111111111111"}
+
+### T1c check (wait 1-2 seconds first, expect CONFIRMED)
+GET http://localhost:8080/bookings/{{kBook1.response.body.$.id}}
+Authorization: Bearer {{kToken}}
+
+
+### ---------- TEST 2: declined card ----------
+
+### T2a book seat 2
+# @name kBook2
+POST http://localhost:8080/bookings
+Authorization: Bearer {{kToken}}
+Content-Type: application/json
+
+{"seatId": {{kSeat2}}}
+
+### T2b pay with a card ending in 0002 (expect 202)
+POST http://localhost:8080/bookings/{{kBook2.response.body.$.id}}/pay
+Authorization: Bearer {{kToken}}
+Content-Type: application/json
+
+{"cardNumber": "4000000000000002"}
+
+### T2c check (wait 1-2 seconds, expect CANCELLED)
+GET http://localhost:8080/bookings/{{kBook2.response.body.$.id}}
+Authorization: Bearer {{kToken}}
+
+
+### ---------- TEST 3: double click ----------
+
+### T3a book seat 3
+# @name kBook3
+POST http://localhost:8080/bookings
+Authorization: Bearer {{kToken}}
+Content-Type: application/json
+
+{"seatId": {{kSeat3}}}
+
+### T3b pay - first click
+POST http://localhost:8080/bookings/{{kBook3.response.body.$.id}}/pay
+Authorization: Bearer {{kToken}}
+Content-Type: application/json
+
+{"cardNumber": "4111111111111111"}
+
+### T3c pay - second click (send within 1 second of T3b!)
+POST http://localhost:8080/bookings/{{kBook3.response.body.$.id}}/pay
+Authorization: Bearer {{kToken}}
+Content-Type: application/json
+
+{"cardNumber": "4111111111111111"}
+
+### T3d check (expect CONFIRMED)
+GET http://localhost:8080/bookings/{{kBook3.response.body.$.id}}
+Authorization: Bearer {{kToken}}

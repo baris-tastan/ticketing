@@ -1,6 +1,9 @@
 spring:
   kafka:
     bootstrap-servers: localhost:9092
+    consumer:
+      group-id: booking-service
+      auto-offset-reset: earliest
   mvc:
     problemdetails:
       enabled: true
