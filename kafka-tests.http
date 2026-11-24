@@ -1,7 +1,7 @@
 ### ===================== KAFKA TESTS =====================
-@kSeat1 = 1
-@kSeat2 = 2
-@kSeat3 = 6
+@kSeat1 = 7
+@kSeat2 = 8
+@kSeat3 = 9
 @kEmail = kafka-test@example.com
 @kPassword = password123
 @kToken = {{kLogin.response.body.$.token}}

@@ -1,6 +1,14 @@
 spring:
   application:
     name: payment-service
+  datasource:
+    url: jdbc:postgresql://localhost:5433/payments
+    username: app
+    password: secret
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
   kafka:
     bootstrap-servers: localhost:9092
     consumer:

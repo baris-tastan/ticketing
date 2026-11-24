@@ -10,9 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketcompany.booking_service.domain.Booking;
 import com.ticketcompany.booking_service.domain.BookingStatus;
-import com.ticketcompany.booking_service.dto.BookingResponse;
-import com.ticketcompany.booking_service.exception.BookingNotFoundException;
-import com.ticketcompany.booking_service.exception.BookingNotPayableException;
 import com.ticketcompany.booking_service.payment.PaymentOutcome;
 import com.ticketcompany.booking_service.repository.BookingRepository;
 
