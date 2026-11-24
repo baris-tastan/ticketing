@@ -14,3 +14,5 @@ spring:
     consumer:
       group-id: payment-service
       auto-offset-reset: earliest
+    listener:
+      concurrency: 3

@@ -1,12 +1,15 @@
 ### ===================== KAFKA TESTS =====================
-@kSeat1 = 7
-@kSeat2 = 8
-@kSeat3 = 9
+@kSeat1 = 20
+@kSeat2 = 21
+@kSeat3 = 22
+@kSeat4 = 8
 @kEmail = kafka-test@example.com
 @kPassword = password123
 @kToken = {{kLogin.response.body.$.token}}
 
+### K0 seat map (pick AVAILABLE seats for the variables above)
 GET http://localhost:8080/events/1/seats
+
 ### K1 register (a 409 "already registered" is fine)
 POST http://localhost:8080/auth/register
 Content-Type: application/json
@@ -19,8 +22,6 @@ POST http://localhost:8080/auth/login
 Content-Type: application/json
 
 {"email": "{{kEmail}}", "password": "{{kPassword}}"}
-
-
 
 
 ### ---------- TEST 1: happy path ----------
@@ -40,7 +41,7 @@ Content-Type: application/json
 
 {"cardNumber": "4111111111111111"}
 
-### T1c check (wait 1-2 seconds first, expect CONFIRMED)
+### T1c check (wait 1-2 seconds, expect CONFIRMED)
 GET http://localhost:8080/bookings/{{kBook1.response.body.$.id}}
 Authorization: Bearer {{kToken}}
 
@@ -91,6 +92,32 @@ Content-Type: application/json
 
 {"cardNumber": "4111111111111111"}
 
-### T3d check (expect CONFIRMED)
+### T3d check (expect CONFIRMED; payment-service log: ONE "BANK: charged" line)
 GET http://localhost:8080/bookings/{{kBook3.response.body.$.id}}
+Authorization: Bearer {{kToken}}
+
+
+### ---------- TEST 4: recovery from a stuck PROCESSING payment ----------
+# 1. Run T4a and note the booking id in the response (say 61).
+# 2. In a terminal, from the ticketing folder, insert the stuck row (replace 61 twice):
+#    docker compose exec payments-db psql -U app -d payments -c "insert into payment (id, booking_id, amount, payment_token, status, created_at) values (9000061, 61, 100.00, 'tok_1111', 'PROCESSING', now())"
+# 3. Run T4b, wait 1-2 seconds, run T4c.
+
+### T4a book seat 4
+# @name kBook4
+POST http://localhost:8080/bookings
+Authorization: Bearer {{kToken}}
+Content-Type: application/json
+
+{"seatId": {{kSeat4}}}
+
+### T4b pay (expect 202; log: "was left PROCESSING; asking the bank again")
+POST http://localhost:8080/bookings/{{kBook4.response.body.$.id}}/pay
+Authorization: Bearer {{kToken}}
+Content-Type: application/json
+
+{"cardNumber": "4111111111111111"}
+
+### T4c check (expect CONFIRMED)
+GET http://localhost:8080/bookings/{{kBook4.response.body.$.id}}
 Authorization: Bearer {{kToken}}

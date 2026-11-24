@@ -35,8 +35,24 @@ public class PaymentProcessor {
             handleDuplicate(request.bookingId());
             return;
         }
+        completeCharge(payment);
+    }
 
-        String outcome = fakeBank.charge(request.amount(), request.paymentToken());
+    private void handleDuplicate(Long bookingId) {
+        Payment existing = paymentRepository.findByBookingId(bookingId).orElseThrow();
+
+        if (existing.getStatus() == PaymentStatus.PROCESSING) {
+            log.warn("Payment for booking {} was left PROCESSING; asking the bank again with the same key", bookingId);
+            completeCharge(existing);
+            return;
+        }
+
+        log.info("Duplicate payment request for booking {}; re-sending result {}", bookingId, existing.getStatus());
+        resultPublisher.publish(new PaymentCompletedEvent(bookingId, existing.getStatus().name()));
+    }
+
+    private void completeCharge(Payment payment) {
+        String outcome = fakeBank.charge(payment.getBookingId(), payment.getAmount(), payment.getPaymentToken());
 
         if ("APPROVED".equals(outcome)) {
             payment.approve();
@@ -45,19 +61,7 @@ public class PaymentProcessor {
         }
         paymentRepository.save(payment);
 
-        resultPublisher.publish(new PaymentCompletedEvent(request.bookingId(), payment.getStatus().name()));
-        log.info("Charged booking {}: {}", request.bookingId(), payment.getStatus());
-    }
-
-    private void handleDuplicate(Long bookingId) {
-        Payment existing = paymentRepository.findByBookingId(bookingId).orElseThrow();
-
-        if (existing.getStatus() == PaymentStatus.PROCESSING) {
-            log.warn("Payment for booking {} is still PROCESSING; not charging again", bookingId);
-            return;
-        }
-
-        log.info("Duplicate payment request for booking {}; re-sending result {}", bookingId, existing.getStatus());
-        resultPublisher.publish(new PaymentCompletedEvent(bookingId, existing.getStatus().name()));
+        resultPublisher.publish(new PaymentCompletedEvent(payment.getBookingId(), payment.getStatus().name()));
+        log.info("Completed payment for booking {}: {}", payment.getBookingId(), payment.getStatus());
     }
 }
