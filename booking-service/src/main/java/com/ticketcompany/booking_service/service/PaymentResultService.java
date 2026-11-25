@@ -42,7 +42,7 @@ public class PaymentResultService {
             return;
         }
 
-        if (!Instant.now().isBefore(booking.getExpiresAt())) {
+        if (booking.isExpired(Instant.now())) {
             booking.cancel();
             log.warn("REFUND NEEDED: booking {} was paid after its deadline", bookingId);
             return;

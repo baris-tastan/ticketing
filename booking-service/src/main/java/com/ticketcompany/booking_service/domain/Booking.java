@@ -59,6 +59,9 @@ public class Booking {
         requirePending("confirm");
         this.status = BookingStatus.CONFIRMED;
     }
+    public boolean isExpired(Instant now) {
+        return !now.isBefore(expiresAt);
+    }
     public Instant getExpiresAt() { return expiresAt; }
 
     public void cancel() {

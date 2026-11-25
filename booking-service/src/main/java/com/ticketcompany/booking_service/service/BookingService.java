@@ -46,9 +46,7 @@ public class BookingService {
         if (booking.getStatus() != BookingStatus.PENDING) {
             throw new BookingNotPayableException(bookingId, "it is " + booking.getStatus());
         }
-        if (!Instant.now().isBefore(booking.getExpiresAt())) {
-            throw new BookingNotPayableException(bookingId, "its payment deadline has passed");
-        }
+        if (booking.isExpired(Instant.now())) throw new BookingNotPayableException(bookingId, "its payment deadline has passed");
 
         paymentRequestPublisher.publish(new PaymentRequestedEvent(
                 bookingId, booking.getSeat().getPrice(), toPaymentToken(cardNumber)));
